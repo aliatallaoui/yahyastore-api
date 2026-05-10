@@ -4,6 +4,9 @@
 @section('page-title', 'تفاصيل الطلب')
 
 @section('topbar-actions')
+<a href="{{ route('admin.orders.print', $order) }}" target="_blank" class="btn btn-outline btn-sm">
+    <i class="fas fa-print"></i> طباعة
+</a>
 <a href="{{ route('admin.orders') }}" class="btn btn-outline btn-sm"><i class="fas fa-arrow-right"></i> العودة</a>
 @endsection
 
@@ -99,7 +102,7 @@ $statusLabel = ['pending'=>'قيد الانتظار','confirmed'=>'مؤكد','sh
         <div style="margin-top:16px; display:flex; gap:10px; flex-wrap:wrap;">
             @if ($order->whatsapp_url)
             <a href="{{ $order->whatsapp_url }}" target="_blank" class="btn" style="background:#25d366;color:#fff;">
-                <i class="fab fa-whatsapp"></i> إرسال رسالة واتساب
+                <i class="fab fa-whatsapp"></i> رسالة الطلب
             </a>
             @endif
 
@@ -113,6 +116,35 @@ $statusLabel = ['pending'=>'قيد الانتظار','confirmed'=>'مؤكد','sh
                 @method('DELETE')
                 <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> حذف الطلب</button>
             </form>
+        </div>
+
+        @php
+            $custPhone = '213' . ltrim($order->phone, '0');
+            $waMessages = [
+                'confirmed' => "السلام عليكم {$order->name}،\nتم تأكيد طلبك رقم *{$order->order_number}* بنجاح ✅\n\nسنتواصل معك قريباً لتحديد موعد التسليم.\n\n🗡️ *ورشة يحيى للموس البوسعادي*",
+                'shipped'   => "السلام عليكم {$order->name}،\nتم إرسال طلبك رقم *{$order->order_number}* 📦\n\nيصلك خلال 2-5 أيام عمل. لأي استفسار تواصل معنا.\n\n🗡️ *ورشة يحيى للموس البوسعادي*",
+                'delivered' => "السلام عليكم {$order->name}،\nنتمنى أن يكون طلبك رقم *{$order->order_number}* وصلك بسلامة ✅\n\nشكراً لثقتك بنا! نتمنى أن يعجبك المنتج ❤️\n\n🗡️ *ورشة يحيى للموس البوسعادي*",
+            ];
+        @endphp
+
+        <div style="margin-top:20px; border-top:1px solid var(--border); padding-top:16px;">
+            <div style="font-size:.82rem; font-weight:700; color:var(--text-muted); margin-bottom:10px;">
+                <i class="fab fa-whatsapp" style="color:#25d366;"></i> إشعار الزبون على واتساب
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <a href="https://wa.me/{{ $custPhone }}?text={{ rawurlencode($waMessages['confirmed']) }}" target="_blank"
+                   class="btn btn-sm" style="background:rgba(52,152,219,.1);color:#3498db;border-color:rgba(52,152,219,.3);">
+                    ✅ تم التأكيد
+                </a>
+                <a href="https://wa.me/{{ $custPhone }}?text={{ rawurlencode($waMessages['shipped']) }}" target="_blank"
+                   class="btn btn-sm" style="background:rgba(155,89,182,.1);color:#9b59b6;border-color:rgba(155,89,182,.3);">
+                    📦 تم الشحن
+                </a>
+                <a href="https://wa.me/{{ $custPhone }}?text={{ rawurlencode($waMessages['delivered']) }}" target="_blank"
+                   class="btn btn-sm" style="background:rgba(39,174,96,.1);color:#2ecc71;border-color:rgba(39,174,96,.3);">
+                    🎉 تم التسليم
+                </a>
+            </div>
         </div>
     </div>
 </div>

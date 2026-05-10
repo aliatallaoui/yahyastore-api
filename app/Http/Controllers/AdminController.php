@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AbandonedCart;
 use App\Models\AnalyticsEvent;
 use App\Models\Order;
 use App\Models\SupportTicket;
@@ -66,17 +67,46 @@ class AdminController extends Controller
 
     public function dashboard()
     {
+        // Abandoned carts: last 7 days, has phone, no matching order placed
+        $recentCarts = AbandonedCart::where('created_at', '>=', now()->subDays(7))
+            ->whereNotNull('phone')->get();
+        $cartPhones   = $recentCarts->pluck('phone')->unique()->values()->all();
+        $orderedPhones = Order::whereIn('phone', $cartPhones)->pluck('phone')->flip()->all();
+        $abandonedCount = $recentCarts->filter(fn($c) => !isset($orderedPhones[$c->phone])
+            && $c->created_at->lt(now()->subMinutes(30))
+        )->count();
+
+        // Low stock: products where stock is set and <= 5
+        $lowStock = \App\Models\Product::where('active', true)
+            ->whereNotNull('stock')
+            ->where('stock', '<=', 5)
+            ->orderBy('stock')
+            ->get(['id', 'name', 'stock']);
+
         $stats = [
             'orders_total'    => Order::count(),
             'orders_today'    => Order::whereDate('created_at', today())->count(),
             'orders_pending'  => Order::where('status', 'pending')->count(),
             'revenue_total'   => Order::whereIn('status', ['confirmed','shipped','delivered'])->sum('total'),
             'tickets_new'     => SupportTicket::where('status', 'new')->count(),
+            'carts_abandoned' => $abandonedCount,
         ];
 
         $recent = Order::with('items')->latest()->limit(8)->get();
 
-        return view('admin.dashboard', compact('stats', 'recent'));
+        // Top 5 selling products (all time)
+        $topProducts = \App\Models\OrderItem::selectRaw("product_name, SUM(qty) as total_qty, SUM(subtotal) as total_revenue")
+            ->groupBy('product_name')
+            ->orderByDesc('total_qty')
+            ->limit(5)
+            ->get();
+
+        // Sale end countdown (launch sale ends 2026-05-17)
+        $saleEnd      = \Carbon\Carbon::parse('2026-05-17 23:59:59');
+        $saleActive   = now()->lt($saleEnd);
+        $saleDaysLeft = $saleActive ? (int) ceil(now()->diffInHours($saleEnd) / 24) : 0;
+
+        return view('admin.dashboard', compact('stats', 'recent', 'lowStock', 'topProducts', 'saleActive', 'saleDaysLeft'));
     }
 
     // ── Profile / Change password ─────────────────────────────────────────────
@@ -148,6 +178,12 @@ class AdminController extends Controller
     {
         $order->load('items');
         return view('admin.order-show', compact('order'));
+    }
+
+    public function orderPrint(Order $order)
+    {
+        $order->load('items');
+        return view('admin.order-print', compact('order'));
     }
 
     public function orderUpdateStatus(Request $request, Order $order)
@@ -264,6 +300,47 @@ class AdminController extends Controller
     {
         $latest = Order::latest()->value('id');
         return response()->json(['id' => $latest ?? 0]);
+    }
+
+    // ── Real-time order stream (Server-Sent Events) ───────────────────────────
+
+    public function streamOrders(Request $request)
+    {
+        session()->save();
+        $initialId = (int) $request->header('Last-Event-ID', 0);
+
+        return response()->stream(function () use ($initialId) {
+            @set_time_limit(0);
+
+            $lastId = $initialId ?: (Order::latest()->value('id') ?? 0);
+            echo "id: {$lastId}\n";
+            echo "data: " . json_encode(['id' => $lastId, 'init' => true]) . "\n\n";
+            if (ob_get_level()) ob_flush();
+            flush();
+
+            while (!connection_aborted()) {
+                sleep(4);
+                if (connection_aborted()) break;
+
+                $latestId = Order::latest()->value('id') ?? 0;
+
+                if ($latestId > $lastId) {
+                    $lastId = $latestId;
+                    echo "id: {$lastId}\n";
+                    echo "data: " . json_encode(['id' => $latestId]) . "\n\n";
+                } else {
+                    echo ": ping\n\n";
+                }
+
+                if (ob_get_level()) ob_flush();
+                flush();
+            }
+        }, 200, [
+            'Content-Type'      => 'text/event-stream',
+            'Cache-Control'     => 'no-cache',
+            'Connection'        => 'keep-alive',
+            'X-Accel-Buffering' => 'no',
+        ]);
     }
 
     // ── Analytics ─────────────────────────────────────────────────────────────
@@ -418,5 +495,26 @@ class AdminController extends Controller
     {
         $ticket->delete();
         return redirect()->route('admin.tickets')->with('success', 'تم حذف التذكرة.');
+    }
+
+    // ── Abandoned Carts ───────────────────────────────────────────────────────
+
+    public function carts()
+    {
+        $carts = AbandonedCart::latest()
+            ->where('created_at', '>=', now()->subDays(7))
+            ->paginate(30);
+
+        // Find which phones have placed orders (= recovered carts)
+        $phones = $carts->pluck('phone')->filter()->unique()->values()->all();
+        $recoveredPhones = Order::whereIn('phone', $phones)->pluck('phone')->flip()->all();
+
+        return view('admin.carts', compact('carts', 'recoveredPhones'));
+    }
+
+    public function cartDelete(AbandonedCart $cart)
+    {
+        $cart->delete();
+        return back()->with('success', 'تم حذف السجل.');
     }
 }

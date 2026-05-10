@@ -24,6 +24,7 @@
                     <th>الفئة</th>
                     <th>السعر</th>
                     <th>الخصم</th>
+                    <th>المخزون</th>
                     <th>الحالة</th>
                     <th>الترتيب</th>
                     <th></th>
@@ -53,6 +54,17 @@
                         <span style="color:var(--danger);font-weight:700;">{{ $product->discount_percent }}%</span>
                         @else
                         <span class="text-muted">—</span>
+                        @endif
+                    </td>
+                    <td>
+                        @if($product->stock === null)
+                            <span class="text-muted" style="font-size:.8rem;">—</span>
+                        @elseif($product->stock === 0)
+                            <span style="color:var(--danger);font-weight:700;font-size:.8rem;">نفد</span>
+                        @elseif($product->stock <= 5)
+                            <span style="color:var(--warning);font-weight:700;">{{ $product->stock }}</span>
+                        @else
+                            <span style="color:var(--success);font-weight:700;">{{ $product->stock }}</span>
                         @endif
                     </td>
                     <td>

@@ -162,6 +162,17 @@ $galleryRaw  = $isEdit ? implode("\n", $product->gallery_images ?? []) : '';
                        {{ old('active', $product?->active ?? true) ? 'checked' : '' }}>
                 <span>منتج نشط (يظهر في المتجر)</span>
             </label>
+            <div style="margin-top:14px;border-top:1px solid var(--border);padding-top:14px;">
+                <label class="field-label" style="display:block;font-size:.82rem;font-weight:700;margin-bottom:6px;color:var(--text);">
+                    المخزون المتاح
+                </label>
+                <input type="number" name="stock" class="form-control" min="0" form="productForm"
+                       value="{{ old('stock', $product?->stock) }}"
+                       placeholder="فارغ = غير محدود">
+                <div class="field-hint" style="font-size:.72rem;color:var(--text-muted);margin-top:4px;">
+                    اتركه فارغاً لكمية غير محدودة — 0 يعني نفد المخزون
+                </div>
+            </div>
         </div>
 
         @if($product)

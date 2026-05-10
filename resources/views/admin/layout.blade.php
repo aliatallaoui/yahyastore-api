@@ -170,6 +170,9 @@
             <span style="margin-right:auto; background:#e74c3c; color:#fff; font-size:.65rem; font-weight:800; padding:2px 7px; border-radius:20px;">{{ $newTickets }}</span>
             @endif
         </a>
+        <a href="{{ route('admin.carts') }}" class="nav-link @if(request()->routeIs('admin.carts*')) active @endif">
+            <i class="fas fa-shopping-cart"></i> السلة المتروكة
+        </a>
         <a href="{{ route('admin.products.index') }}" class="nav-link @if(request()->routeIs('admin.products*')) active @endif">
             <i class="fas fa-box-open"></i> المنتجات
         </a>
@@ -290,26 +293,54 @@ window._notif = (function() {
     document.addEventListener('click',   unlockAudio, { once: false });
     document.addEventListener('keydown', unlockAudio, { once: false });
 
-    // ── Chime: C5 → E5 → G5 → C6 (pleasant rising arpeggio) ────────────────
+    // ── Chime: Shopify-style ka-ching cash register ──────────────────────────
     function playChime() {
         if (_muted) return;
         try {
-            const ctx   = getCtx();
-            const notes = [523.25, 659.25, 783.99, 1046.5];
-            const vol   = 0.38;
-            notes.forEach((freq, i) => {
-                const t    = ctx.currentTime + i * 0.19;
-                const osc  = ctx.createOscillator();
-                const gain = ctx.createGain();
-                osc.connect(gain);
-                gain.connect(ctx.destination);
-                osc.type = 'sine';
-                osc.frequency.setValueAtTime(freq, t);
-                gain.gain.setValueAtTime(0, t);
-                gain.gain.linearRampToValueAtTime(vol, t + 0.04);
-                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
-                osc.start(t);
-                osc.stop(t + 0.58);
+            const ctx = getCtx();
+            const t   = ctx.currentTime;
+
+            // Master compressor for clean output
+            const comp = ctx.createDynamicsCompressor();
+            comp.threshold.value = -12; comp.knee.value = 6;
+            comp.ratio.value = 4; comp.attack.value = 0.001; comp.release.value = 0.15;
+            comp.connect(ctx.destination);
+
+            // "Ka" — mechanical register click (filtered noise burst)
+            const bufLen   = Math.floor(ctx.sampleRate * 0.06);
+            const clickBuf = ctx.createBuffer(1, bufLen, ctx.sampleRate);
+            const d        = clickBuf.getChannelData(0);
+            for (let i = 0; i < bufLen; i++) d[i] = (Math.random()*2-1) * Math.pow(1-i/bufLen, 4);
+            const click = ctx.createBufferSource(); click.buffer = clickBuf;
+            const hpf   = ctx.createBiquadFilter(); hpf.type = 'highpass'; hpf.frequency.value = 2000; hpf.Q.value = 1;
+            const cg    = ctx.createGain(); cg.gain.value = 0.5;
+            click.connect(hpf); hpf.connect(cg); cg.connect(comp);
+            click.start(t); click.stop(t + 0.07);
+
+            // "Ching" — metallic cash register bell ring (starts 25ms after click)
+            const cs = t + 0.025;
+            [[1318.51,'triangle',0.35,0.55],[1760.00,'triangle',0.25,0.45],[2093.00,'sine',0.15,0.38],[2637.02,'sine',0.09,0.28]]
+            .forEach(([freq, type, amp, dur]) => {
+                const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq;
+                const g = ctx.createGain();
+                g.gain.setValueAtTime(0, cs);
+                g.gain.linearRampToValueAtTime(amp, cs + 0.008);
+                g.gain.exponentialRampToValueAtTime(0.0001, cs + dur);
+                o.connect(g); g.connect(comp);
+                o.start(cs); o.stop(cs + dur + 0.05);
+            });
+
+            // High shimmer 80ms later (the bright "ing" tail)
+            const ss = t + 0.08;
+            [[2793.83,'sine',0.08,0.22],[3136.00,'sine',0.05,0.18]]
+            .forEach(([freq, type, amp, dur]) => {
+                const o = ctx.createOscillator(); o.type = type; o.frequency.value = freq;
+                const g = ctx.createGain();
+                g.gain.setValueAtTime(0, ss);
+                g.gain.linearRampToValueAtTime(amp, ss + 0.005);
+                g.gain.exponentialRampToValueAtTime(0.0001, ss + dur);
+                o.connect(g); g.connect(comp);
+                o.start(ss); o.stop(ss + dur + 0.05);
             });
         } catch (e) {}
     }
@@ -366,36 +397,45 @@ window._notif = (function() {
 
     updateMuteUI();
 
-    // ── Poll for new orders ──────────────────────────────────────────────────
-    function poll() {
-        fetch('{{ route("admin.orders.latest-id") }}', { credentials: 'same-origin' })
-            .then(r => r.ok ? r.json() : null)
-            .then(data => {
-                if (!data) return;
-                const newId  = data.id  || 0;
-                const lastId = parseInt(localStorage.getItem(STORE_KEY) || '0');
+    // ── Real-time order stream via Server-Sent Events ────────────────────────
+    let _es = null;
+    let _reconnTimer = null;
 
-                if (!lastId) {
-                    localStorage.setItem(STORE_KEY, newId);
-                    return;
-                }
+    function handleOrderEvent(data) {
+        const newId  = data.id || 0;
+        const lastId = parseInt(localStorage.getItem(STORE_KEY) || '0');
 
-                if (newId > lastId) {
-                    localStorage.setItem(STORE_KEY, newId);
-                    const diff = newId - lastId;
-                    playChime();
-                    showToast(diff > 1 ? `وصل ${diff} طلبات جديدة!` : 'وصل طلب جديد للتو!');
+        if (data.init) {
+            if (!lastId) localStorage.setItem(STORE_KEY, newId);
+            return;
+        }
 
-                    // Bump pending badge count in sidebar
-                    const badge = document.querySelector('.sidebar-nav a[href*="/orders"] span');
-                    if (badge) badge.textContent = Math.max(0, parseInt(badge.textContent || 0) + diff);
-                }
-            })
-            .catch(() => {});
+        if (newId > lastId) {
+            const diff = newId - lastId;
+            localStorage.setItem(STORE_KEY, newId);
+            playChime();
+            showToast(diff > 1 ? `وصل ${diff} طلبات جديدة!` : 'وصل طلب جديد للتو!');
+            const badge = document.querySelector('.sidebar-nav a[href*="/orders"] span');
+            if (badge) badge.textContent = Math.max(0, parseInt(badge.textContent || 0) + diff);
+        } else if (newId > 0) {
+            localStorage.setItem(STORE_KEY, newId);
+        }
     }
 
-    setTimeout(poll, 4000);
-    setInterval(poll, POLL_MS);
+    function connectSSE() {
+        if (_es) { _es.close(); _es = null; }
+        _es = new EventSource('{{ route("admin.orders.stream") }}');
+        _es.onmessage = function(e) {
+            try { handleOrderEvent(JSON.parse(e.data)); } catch(ex) {}
+        };
+        _es.onerror = function() {
+            _es.close(); _es = null;
+            clearTimeout(_reconnTimer);
+            _reconnTimer = setTimeout(connectSSE, 10000);
+        };
+    }
+
+    connectSSE();
 
     return { toggleMute, closeToast, playChime };
 })();

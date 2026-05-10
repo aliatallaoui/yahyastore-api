@@ -76,6 +76,7 @@ class AdminProductController extends Controller
             'gallery_raw'      => 'nullable|string',
             'sort_order'       => 'sometimes|integer|min:0',
             'active'           => 'sometimes|boolean',
+            'stock'            => 'nullable|integer|min:0',
         ]);
 
         // Handle uploaded image file

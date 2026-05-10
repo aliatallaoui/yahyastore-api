@@ -37,8 +37,9 @@ Route::prefix('api')->name('api.')->group(function () {
     Route::options('/{any}',  [ApiController::class, 'handleOptions'])->where('any', '.*');
     Route::get('/products',   [ApiController::class, 'products'])->name('products');
     Route::post('/orders',    [ApiController::class, 'storeOrder'])->name('orders');
-    Route::post('/contact',   [ApiController::class, 'storeTicket'])->name('contact');
-    Route::post('/analytics', [ApiController::class, 'storeAnalytics'])->name('analytics');
+    Route::post('/contact',    [ApiController::class, 'storeTicket'])->name('contact');
+    Route::post('/analytics',  [ApiController::class, 'storeAnalytics'])->name('analytics');
+    Route::post('/carts/save', [ApiController::class, 'saveCart'])->name('carts.save');
 });
 
 // Admin
@@ -52,7 +53,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/orders',                        [AdminController::class, 'orders'])->name('orders');
         Route::get('/orders/export',                 [AdminController::class, 'exportOrders'])->name('orders.export');
         Route::post('/orders/bulk-status',           [AdminController::class, 'bulkUpdateOrders'])->name('orders.bulk-status');
+        Route::get('/orders/stream',                 [AdminController::class, 'streamOrders'])->name('orders.stream');
         Route::get('/orders/{order}',                [AdminController::class, 'orderShow'])->name('orders.show');
+        Route::get('/orders/{order}/print',          [AdminController::class, 'orderPrint'])->name('orders.print');
         Route::post('/orders/{order}/status',        [AdminController::class, 'orderUpdateStatus'])->name('orders.status');
         Route::delete('/orders/{order}',             [AdminController::class, 'orderDelete'])->name('orders.delete');
 
@@ -64,6 +67,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         // Analytics
         Route::get('/analytics',      [AdminController::class, 'analytics'])->name('analytics');
         Route::get('/orders/latest-id',[AdminController::class, 'latestOrderId'])->name('orders.latest-id');
+
+        // Abandoned Carts
+        Route::get('/carts',                         [AdminController::class, 'carts'])->name('carts');
+        Route::delete('/carts/{cart}',               [AdminController::class, 'cartDelete'])->name('carts.delete');
 
         // Support Tickets
         Route::get('/tickets',                       [AdminController::class, 'tickets'])->name('tickets');

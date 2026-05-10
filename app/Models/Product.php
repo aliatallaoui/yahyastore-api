@@ -11,7 +11,7 @@ class Product extends Model
         'price', 'old_price', 'discount_percent',
         'category', 'category_label', 'image',
         'features', 'gallery_images', 'related_product_ids',
-        'sort_order', 'active',
+        'sort_order', 'active', 'stock',
     ];
 
     protected $casts = [

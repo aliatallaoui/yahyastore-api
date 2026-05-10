@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AbandonedCart;
 use App\Models\AnalyticsEvent;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -36,6 +37,8 @@ class ApiController extends Controller
                     $p->gallery_images ?? []
                 )))->map(fn($i) => url('images/' . $i))->values()->all(),
                 'features'          => $p->features ?? [],
+                'in_stock'          => $p->stock === null || $p->stock > 0,
+                'stock'             => $p->stock,
             ]);
 
         return response()->json($products)
@@ -185,6 +188,28 @@ class ApiController extends Controller
             'ip'           => $request->ip(),
             'ua'           => substr($request->userAgent() ?? '', 0, 300),
         ]);
+
+        return response()->json(['ok' => true])
+            ->header('Access-Control-Allow-Origin', '*');
+    }
+
+    public function saveCart(Request $request)
+    {
+        $data = $request->validate([
+            'session_id' => 'required|string|max:64',
+            'phone'      => ['nullable', 'regex:/^(05|06|07)\d{8}$/'],
+            'items'      => 'required|array|min:1',
+            'total'      => 'required|integer|min:0',
+        ]);
+
+        AbandonedCart::updateOrCreate(
+            ['session_id' => $data['session_id']],
+            [
+                'phone' => $data['phone'] ?? null,
+                'items' => $data['items'],
+                'total' => $data['total'],
+            ]
+        );
 
         return response()->json(['ok' => true])
             ->header('Access-Control-Allow-Origin', '*');
