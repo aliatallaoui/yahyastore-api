@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AnalyticsEvent;
 use App\Models\Order;
 use App\Models\SupportTicket;
 use Illuminate\Http\Request;
@@ -166,6 +167,124 @@ class AdminController extends Controller
         $order->delete();
 
         return redirect()->route('admin.orders')->with('success', 'تم حذف الطلب.');
+    }
+
+    // ── Order notification polling ────────────────────────────────────────────
+
+    public function latestOrderId()
+    {
+        $latest = Order::latest()->value('id');
+        return response()->json(['id' => $latest ?? 0]);
+    }
+
+    // ── Analytics ─────────────────────────────────────────────────────────────
+
+    public function analytics()
+    {
+        $now   = now();
+        $today = $now->copy()->startOfDay();
+        $d7    = $now->copy()->subDays(7)->startOfDay();
+        $d30   = $now->copy()->subDays(30)->startOfDay();
+        $d14   = $now->copy()->subDays(14)->startOfDay();
+
+        // ── KPIs ──
+        $kpi = [
+            'visits_today'    => AnalyticsEvent::where('event', 'pageview')->where('created_at', '>=', $today)->count(),
+            'unique_today'    => AnalyticsEvent::where('event', 'pageview')->where('created_at', '>=', $today)->distinct('session_id')->count('session_id'),
+            'visits_30'       => AnalyticsEvent::where('event', 'pageview')->where('created_at', '>=', $d30)->count(),
+            'unique_30'       => AnalyticsEvent::where('event', 'pageview')->where('created_at', '>=', $d30)->distinct('session_id')->count('session_id'),
+            'product_views_30'=> AnalyticsEvent::where('event', 'product_view')->where('created_at', '>=', $d30)->count(),
+            'add_to_cart_30'  => AnalyticsEvent::where('event', 'add_to_cart')->where('created_at', '>=', $d30)->count(),
+            'checkout_30'     => AnalyticsEvent::where('event', 'checkout_start')->where('created_at', '>=', $d30)->count(),
+            'orders_30'       => Order::where('created_at', '>=', $d30)->count(),
+            'orders_today'    => Order::whereDate('created_at', today())->count(),
+            'revenue_30'      => Order::where('created_at', '>=', $d30)->whereIn('status', ['confirmed','shipped','delivered'])->sum('total'),
+            'revenue_today'   => Order::whereDate('created_at', today())->whereIn('status', ['confirmed','shipped','delivered'])->sum('total'),
+        ];
+
+        // ── Conversion funnel (last 30 days, unique sessions) ──
+        $funnel = [
+            'visits'   => $kpi['unique_30'],
+            'views'    => AnalyticsEvent::where('event', 'product_view')->where('created_at', '>=', $d30)->distinct('session_id')->count('session_id'),
+            'cart'     => AnalyticsEvent::where('event', 'add_to_cart')->where('created_at', '>=', $d30)->distinct('session_id')->count('session_id'),
+            'checkout' => AnalyticsEvent::where('event', 'checkout_start')->where('created_at', '>=', $d30)->distinct('session_id')->count('session_id'),
+            'orders'   => $kpi['orders_30'],
+        ];
+
+        // ── 14-day chart ──
+        $chartLabels = [];
+        $chartVisits = [];
+        $chartOrders = [];
+
+        $dailyVisitsRaw = AnalyticsEvent::where('event', 'pageview')
+            ->where('created_at', '>=', $d14)
+            ->selectRaw("DATE(created_at) as date, COUNT(DISTINCT session_id) as cnt")
+            ->groupBy('date')
+            ->pluck('cnt', 'date');
+
+        $dailyOrdersRaw = Order::where('created_at', '>=', $d14)
+            ->selectRaw("DATE(created_at) as date, COUNT(*) as cnt")
+            ->groupBy('date')
+            ->pluck('cnt', 'date');
+
+        for ($i = 13; $i >= 0; $i--) {
+            $d = $now->copy()->subDays($i)->format('Y-m-d');
+            $chartLabels[] = $now->copy()->subDays($i)->format('d/m');
+            $chartVisits[] = (int) ($dailyVisitsRaw[$d] ?? 0);
+            $chartOrders[] = (int) ($dailyOrdersRaw[$d] ?? 0);
+        }
+
+        // ── Top pages ──
+        $topPages = AnalyticsEvent::where('event', 'pageview')
+            ->where('created_at', '>=', $d30)
+            ->selectRaw("page, COUNT(*) as views")
+            ->groupBy('page')
+            ->orderByDesc('views')
+            ->limit(10)
+            ->get();
+
+        // ── Top products viewed ──
+        $topViewed = AnalyticsEvent::where('event', 'product_view')
+            ->where('created_at', '>=', $d30)
+            ->selectRaw("product_name, COUNT(*) as views")
+            ->groupBy('product_name')
+            ->orderByDesc('views')
+            ->limit(8)
+            ->get();
+
+        // ── Top products added to cart ──
+        $topCart = AnalyticsEvent::where('event', 'add_to_cart')
+            ->where('created_at', '>=', $d30)
+            ->selectRaw("product_name, COUNT(*) as adds")
+            ->groupBy('product_name')
+            ->orderByDesc('adds')
+            ->limit(8)
+            ->get();
+
+        // ── Orders by wilaya (top 10) ──
+        $byWilaya = Order::where('created_at', '>=', $d30)
+            ->selectRaw("wilaya_name, COUNT(*) as cnt, SUM(total) as revenue")
+            ->groupBy('wilaya_name')
+            ->orderByDesc('cnt')
+            ->limit(10)
+            ->get();
+
+        // ── Device split (30d) ──
+        $mobilePatterns = '%Mobile%';
+        $mobileCount = AnalyticsEvent::where('event', 'pageview')
+            ->where('created_at', '>=', $d30)
+            ->where(fn($q) => $q->where('ua','like','%Mobile%')->orWhere('ua','like','%Android%')->orWhere('ua','like','%iPhone%')->orWhere('ua','like','%iPad%'))
+            ->distinct('session_id')->count('session_id');
+        $desktopCount = max(0, $kpi['unique_30'] - $mobileCount);
+
+        // ── Recent events ──
+        $recentEvents = AnalyticsEvent::latest('created_at')->limit(15)->get();
+
+        return view('admin.analytics', compact(
+            'kpi','funnel','chartLabels','chartVisits','chartOrders',
+            'topPages','topViewed','topCart','byWilaya',
+            'mobileCount','desktopCount','recentEvents'
+        ));
     }
 
     // ── Support Tickets ───────────────────────────────────────────────────────

@@ -155,6 +155,9 @@
         <a href="{{ route('admin.dashboard') }}" class="nav-link @if(request()->routeIs('admin.dashboard')) active @endif">
             <i class="fas fa-chart-bar"></i> لوحة التحكم
         </a>
+        <a href="{{ route('admin.analytics') }}" class="nav-link @if(request()->routeIs('admin.analytics')) active @endif">
+            <i class="fas fa-chart-line"></i> الإحصائيات
+        </a>
         <a href="{{ route('admin.orders') }}" class="nav-link @if(request()->routeIs('admin.orders*')) active @endif">
             <i class="fas fa-shopping-bag"></i> الطلبات
             @if($pendingCount > 0)
@@ -209,6 +212,111 @@
         @yield('content')
     </div>
 </div>
+
+
+{{-- ── Order notification sound ─────────────────────────────────────────── --}}
+<div id="orderToast" style="
+    display:none;position:fixed;bottom:28px;right:28px;z-index:9999;
+    background:#1a1a10;border:1px solid var(--gold);border-radius:12px;
+    padding:16px 20px;min-width:260px;box-shadow:0 8px 32px rgba(0,0,0,.6);
+    animation:slideIn .35s ease;
+" role="alert">
+    <div style="display:flex;align-items:center;gap:12px;">
+        <div style="font-size:1.6rem;">🎉</div>
+        <div>
+            <div style="color:var(--gold);font-weight:800;font-size:.95rem;">طلب جديد!</div>
+            <div id="orderToastMsg" style="color:var(--text-muted);font-size:.78rem;margin-top:2px;"></div>
+        </div>
+        <button onclick="document.getElementById('orderToast').style.display='none'"
+                style="margin-right:auto;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;padding:0 0 0 4px;">✕</button>
+    </div>
+    <a id="orderToastLink" href="{{ route('admin.orders') }}"
+       style="display:block;margin-top:10px;text-align:center;background:var(--gold);color:#111;border-radius:7px;padding:6px;font-size:.82rem;font-weight:800;text-decoration:none;">
+        عرض الطلب
+    </a>
+</div>
+
+<style>
+@keyframes slideIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+</style>
+
+<script>
+(function() {
+    const STORE_KEY = 'yhy_last_order_id';
+    const POLL_MS   = 30000;
+
+    // ── Web Audio chime ──────────────────────────────────────────────────────
+    function playChime() {
+        try {
+            const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+            const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+            notes.forEach((freq, i) => {
+                const osc  = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.type      = 'sine';
+                osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.18);
+                gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.18);
+                gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + i * 0.18 + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.5);
+                osc.start(ctx.currentTime + i * 0.18);
+                osc.stop(ctx.currentTime + i * 0.18 + 0.55);
+            });
+        } catch (e) {}
+    }
+
+    // ── Toast ────────────────────────────────────────────────────────────────
+    function showToast(msg) {
+        const toast = document.getElementById('orderToast');
+        const msgEl = document.getElementById('orderToastMsg');
+        if (!toast) return;
+        if (msgEl) msgEl.textContent = msg;
+        toast.style.display = 'block';
+        toast.style.animation = 'none';
+        toast.offsetHeight; // reflow
+        toast.style.animation = 'slideIn .35s ease';
+        clearTimeout(toast._timer);
+        toast._timer = setTimeout(() => { toast.style.display = 'none'; }, 8000);
+    }
+
+    // ── Poll ─────────────────────────────────────────────────────────────────
+    function poll() {
+        fetch('{{ route("admin.orders.latest-id") }}', { credentials: 'same-origin' })
+            .then(r => r.json())
+            .then(data => {
+                const newId  = data.id || 0;
+                const lastId = parseInt(localStorage.getItem(STORE_KEY) || '0');
+
+                if (lastId === 0) {
+                    // First run — just store current, don't alert
+                    localStorage.setItem(STORE_KEY, newId);
+                    return;
+                }
+
+                if (newId > lastId) {
+                    localStorage.setItem(STORE_KEY, newId);
+                    playChime();
+                    const diff = newId - lastId;
+                    showToast(diff > 1 ? `${diff} طلبات جديدة وصلت!` : 'طلب جديد وصل للتو!');
+
+                    // Update order link to show latest order
+                    const link = document.getElementById('orderToastLink');
+                    if (link) link.href = '{{ route("admin.orders") }}';
+
+                    // Update pending badge in sidebar without reload
+                    const badge = document.querySelector('.sidebar-nav .nav-link[href*="orders"] span');
+                    if (badge) badge.textContent = parseInt(badge.textContent || 0) + diff;
+                }
+            })
+            .catch(() => {});
+    }
+
+    // Start polling after a short delay (let page settle)
+    setTimeout(poll, 3000);
+    setInterval(poll, POLL_MS);
+})();
+</script>
 
 </body>
 </html>

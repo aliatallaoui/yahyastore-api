@@ -38,6 +38,7 @@ Route::prefix('api')->name('api.')->group(function () {
     Route::get('/products',   [ApiController::class, 'products'])->name('products');
     Route::post('/orders',    [ApiController::class, 'storeOrder'])->name('orders');
     Route::post('/contact',   [ApiController::class, 'storeTicket'])->name('contact');
+    Route::post('/analytics', [ApiController::class, 'storeAnalytics'])->name('analytics');
 });
 
 // Admin
@@ -57,6 +58,10 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/profile',                       [AdminController::class, 'profileForm'])->name('profile');
         Route::post('/profile/password',             [AdminController::class, 'changePassword'])->name('profile.password');
         Route::post('/profile/name',                 [AdminController::class, 'changeName'])->name('profile.name');
+
+        // Analytics
+        Route::get('/analytics',      [AdminController::class, 'analytics'])->name('analytics');
+        Route::get('/orders/latest-id',[AdminController::class, 'latestOrderId'])->name('orders.latest-id');
 
         // Support Tickets
         Route::get('/tickets',                       [AdminController::class, 'tickets'])->name('tickets');

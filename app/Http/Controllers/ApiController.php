@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AnalyticsEvent;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -163,6 +164,30 @@ class ApiController extends Controller
         $msg .= "━━━━━━━━━━━━━━━";
 
         return 'https://wa.me/' . $waNumber . '?text=' . rawurlencode($msg);
+    }
+
+    public function storeAnalytics(Request $request)
+    {
+        $allowed = ['pageview', 'product_view', 'add_to_cart', 'checkout_start'];
+        $event   = $request->input('event');
+
+        if (!in_array($event, $allowed)) {
+            return response()->json(['ok' => false], 400)
+                ->header('Access-Control-Allow-Origin', '*');
+        }
+
+        AnalyticsEvent::create([
+            'event'        => $event,
+            'session_id'   => substr((string) $request->input('session_id', ''), 0, 64),
+            'page'         => substr((string) $request->input('page', ''), 0, 200),
+            'product_id'   => $request->input('product_id'),
+            'product_name' => substr((string) $request->input('product_name', ''), 0, 200),
+            'ip'           => $request->ip(),
+            'ua'           => substr($request->userAgent() ?? '', 0, 300),
+        ]);
+
+        return response()->json(['ok' => true])
+            ->header('Access-Control-Allow-Origin', '*');
     }
 
     public function storeTicket(Request $request)
