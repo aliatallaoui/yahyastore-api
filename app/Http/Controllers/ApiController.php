@@ -230,6 +230,35 @@ class ApiController extends Controller
             ->header('Access-Control-Allow-Origin', '*');
     }
 
+    public function trackOrder(Request $request)
+    {
+        $request->validate([
+            'phone' => ['required', 'regex:/^(05|06|07)\d{8}$/'],
+        ]);
+
+        $phone  = $request->input('phone');
+        $orders = Order::with('items')
+            ->where('phone', $phone)
+            ->latest()
+            ->limit(20)
+            ->get()
+            ->map(fn($o) => [
+                'order_number' => $o->order_number,
+                'status'       => $o->status,
+                'wilaya'       => $o->wilaya_name,
+                'total'        => (int) $o->total,
+                'date'         => $o->created_at->format('Y/m/d'),
+                'items_count'  => $o->items->sum('qty'),
+                'items'        => $o->items->map(fn($i) => [
+                    'name' => $i->product_name,
+                    'qty'  => $i->qty,
+                ])->values()->all(),
+            ]);
+
+        return response()->json(['orders' => $orders])
+            ->header('Access-Control-Allow-Origin', '*');
+    }
+
     public function handleOptions()
     {
         return response('', 204)

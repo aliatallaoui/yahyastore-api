@@ -40,6 +40,7 @@ Route::prefix('api')->name('api.')->group(function () {
     Route::post('/contact',    [ApiController::class, 'storeTicket'])->name('contact');
     Route::post('/analytics',  [ApiController::class, 'storeAnalytics'])->name('analytics');
     Route::post('/carts/save', [ApiController::class, 'saveCart'])->name('carts.save');
+    Route::get('/orders/track',  [ApiController::class, 'trackOrder'])->name('orders.track');
 });
 
 // Admin
