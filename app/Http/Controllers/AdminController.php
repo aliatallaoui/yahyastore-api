@@ -327,15 +327,17 @@ class AdminController extends Controller
         $initialId = (int) $request->header('Last-Event-ID', 0);
 
         return response()->stream(function () use ($initialId) {
-            @set_time_limit(0);
+            @set_time_limit(120);
 
-            $lastId = $initialId ?: (Order::latest()->value('id') ?? 0);
+            $lastId    = $initialId ?: (Order::latest()->value('id') ?? 0);
+            $startTime = time();
+
             echo "id: {$lastId}\n";
             echo "data: " . json_encode(['id' => $lastId, 'init' => true]) . "\n\n";
             if (ob_get_level()) ob_flush();
             flush();
 
-            while (!connection_aborted()) {
+            while (!connection_aborted() && (time() - $startTime) < 90) {
                 sleep(4);
                 if (connection_aborted()) break;
 
