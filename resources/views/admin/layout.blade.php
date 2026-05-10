@@ -158,11 +158,18 @@
         <a href="{{ route('admin.products.index') }}" class="nav-link @if(request()->routeIs('admin.products*')) active @endif">
             <i class="fas fa-box-open"></i> المنتجات
         </a>
+        <a href="{{ route('admin.profile') }}" class="nav-link @if(request()->routeIs('admin.profile')) active @endif">
+            <i class="fas fa-user-shield"></i> الملف الشخصي
+        </a>
         <a href="{{ route('home') }}" target="_blank" class="nav-link">
             <i class="fas fa-external-link-alt"></i> المتجر
         </a>
     </nav>
     <div class="sidebar-footer">
+        <div style="padding: 8px 14px 12px; font-size:.8rem;">
+            <div style="color:var(--gold); font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ Auth::user()->name }}</div>
+            <div style="color:var(--text-muted); font-size:.72rem; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;">{{ Auth::user()->email }}</div>
+        </div>
         <form method="POST" action="{{ route('admin.logout') }}">
             @csrf
             <button type="submit" class="logout-btn"><i class="fas fa-sign-out-alt"></i> تسجيل الخروج</button>
@@ -183,8 +190,8 @@
         @if (session('success'))
         <div class="alert alert-success"><i class="fas fa-check-circle"></i> {{ session('success') }}</div>
         @endif
-        @if ($errors->has('password'))
-        <div class="alert alert-error"><i class="fas fa-times-circle"></i> {{ $errors->first('password') }}</div>
+        @if ($errors->any())
+        <div class="alert alert-error"><i class="fas fa-times-circle"></i> {{ $errors->first() }}</div>
         @endif
 
         @yield('content')

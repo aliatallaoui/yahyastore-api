@@ -51,6 +51,11 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::post('/orders/{order}/status',        [AdminController::class, 'orderUpdateStatus'])->name('orders.status');
         Route::delete('/orders/{order}',             [AdminController::class, 'orderDelete'])->name('orders.delete');
 
+        // Profile
+        Route::get('/profile',                       [AdminController::class, 'profileForm'])->name('profile');
+        Route::post('/profile/password',             [AdminController::class, 'changePassword'])->name('profile.password');
+        Route::post('/profile/name',                 [AdminController::class, 'changeName'])->name('profile.name');
+
         // Products
         Route::get('/products',                      [AdminProductController::class, 'index'])->name('products.index');
         Route::get('/products/create',               [AdminProductController::class, 'create'])->name('products.create');

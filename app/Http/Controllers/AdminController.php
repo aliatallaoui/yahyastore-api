@@ -3,8 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
-use App\Models\OrderItem;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Validation\ValidationException;
 
 class AdminController extends Controller
 {
@@ -12,7 +15,7 @@ class AdminController extends Controller
 
     public function loginForm()
     {
-        if (session('admin_authenticated')) {
+        if (Auth::check() && Auth::user()->is_admin) {
             return redirect()->route('admin.orders');
         }
         return view('admin.login');
@@ -20,20 +23,71 @@ class AdminController extends Controller
 
     public function login(Request $request)
     {
-        $request->validate(['password' => 'required']);
+        $request->validate([
+            'email'    => 'required|email',
+            'password' => 'required',
+        ]);
 
-        if ($request->password !== config('app.admin_password')) {
-            return back()->withErrors(['password' => 'كلمة المرور غير صحيحة']);
+        $key = 'admin-login:' . $request->ip();
+
+        if (RateLimiter::tooManyAttempts($key, 5)) {
+            $seconds = RateLimiter::availableIn($key);
+            throw ValidationException::withMessages([
+                'email' => "محاولات كثيرة جداً. حاول مجدداً بعد {$seconds} ثانية.",
+            ]);
         }
 
-        session(['admin_authenticated' => true]);
-        return redirect()->route('admin.orders');
+        $credentials = ['email' => $request->email, 'password' => $request->password, 'is_admin' => true];
+
+        if (Auth::attempt($credentials, $request->boolean('remember'))) {
+            RateLimiter::clear($key);
+            $request->session()->regenerate();
+            return redirect()->intended(route('admin.orders'));
+        }
+
+        RateLimiter::hit($key, 300);
+
+        throw ValidationException::withMessages([
+            'email' => 'البريد الإلكتروني أو كلمة المرور غير صحيحة.',
+        ]);
     }
 
-    public function logout()
+    public function logout(Request $request)
     {
-        session()->forget('admin_authenticated');
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
         return redirect()->route('admin.login');
+    }
+
+    // ── Profile / Change password ─────────────────────────────────────────────
+
+    public function profileForm()
+    {
+        return view('admin.profile');
+    }
+
+    public function changePassword(Request $request)
+    {
+        $request->validate([
+            'current_password' => 'required',
+            'new_password'     => 'required|min:8|confirmed',
+        ]);
+
+        if (! Hash::check($request->current_password, Auth::user()->password)) {
+            return back()->withErrors(['current_password' => 'كلمة المرور الحالية غير صحيحة.']);
+        }
+
+        Auth::user()->update(['password' => Hash::make($request->new_password)]);
+
+        return back()->with('success', 'تم تغيير كلمة المرور بنجاح.');
+    }
+
+    public function changeName(Request $request)
+    {
+        $request->validate(['name' => 'required|string|max:100']);
+        Auth::user()->update(['name' => $request->name]);
+        return back()->with('success', 'تم تحديث الاسم بنجاح.');
     }
 
     // ── Orders ────────────────────────────────────────────────────────────────
@@ -85,7 +139,7 @@ class AdminController extends Controller
 
         $order->update(['status' => $request->status]);
 
-        return back()->with('success', 'تم تحديث حالة الطلب بنجاح');
+        return back()->with('success', 'تم تحديث حالة الطلب بنجاح.');
     }
 
     public function orderDelete(Order $order)
@@ -93,6 +147,6 @@ class AdminController extends Controller
         $order->items()->delete();
         $order->delete();
 
-        return redirect()->route('admin.orders')->with('success', 'تم حذف الطلب');
+        return redirect()->route('admin.orders')->with('success', 'تم حذف الطلب.');
     }
 }
