@@ -15,10 +15,40 @@ class AdminProductController extends Controller
         'sale'      => 'عروض خاصة',
     ];
 
-    public function index()
+    public function index(Request $request)
     {
-        $products = Product::orderBy('sort_order')->get();
-        return view('admin.products.index', ['products' => $products, 'categories' => $this->categories]);
+        $search   = $request->query('q');
+        $category = $request->query('category');
+        $active   = $request->query('active');
+        $stock    = $request->query('stock');
+
+        $query = Product::orderBy('sort_order');
+
+        if ($search) {
+            $query->where('name', 'like', "%{$search}%");
+        }
+        if ($category) {
+            $query->where('category', $category);
+        }
+        if ($active !== null && $active !== '') {
+            $query->where('active', (bool) (int) $active);
+        }
+        if ($stock === 'out') {
+            $query->where('stock', 0);
+        } elseif ($stock === 'low') {
+            $query->whereNotNull('stock')->where('stock', '<=', 5)->where('stock', '>', 0);
+        }
+
+        $products = $query->get();
+
+        return view('admin.products.index', [
+            'products'       => $products,
+            'categories'     => $this->categories,
+            'search'         => $search,
+            'categoryFilter' => $category,
+            'activeFilter'   => $active,
+            'stockFilter'    => $stock,
+        ]);
     }
 
     public function create()

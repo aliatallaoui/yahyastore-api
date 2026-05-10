@@ -5,22 +5,26 @@
 
 @section('topbar-actions')
 <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;">
-    <form method="GET" action="{{ route('admin.orders') }}" class="search-form">
+    <form method="GET" action="{{ route('admin.orders') }}" class="search-form" id="ordersFilterForm">
         @if($status && $status !== 'all')
             <input type="hidden" name="status" value="{{ $status }}">
         @endif
         <input type="text" name="q" placeholder="بحث بالاسم، الهاتف، رقم الطلب..."
-               value="{{ $search ?? '' }}" style="min-width:220px;">
+               value="{{ $search ?? '' }}" style="min-width:200px;">
+        <input type="date" name="date_from" value="{{ $dateFrom ?? '' }}"
+               title="من تاريخ" style="min-width:130px;">
+        <input type="date" name="date_to" value="{{ $dateTo ?? '' }}"
+               title="إلى تاريخ" style="min-width:130px;">
         <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i></button>
-        @if($search)
+        @if($search || $dateFrom || $dateTo)
         <a href="{{ route('admin.orders', $status ? ['status' => $status] : []) }}" class="btn btn-outline btn-sm">✕</a>
         @endif
     </form>
 
-    {{-- CSV Export --}}
-    <a href="{{ route('admin.orders.export', array_filter(['status' => $status, 'q' => $search])) }}"
+    {{-- CSV Export (preserves all current filters) --}}
+    <a href="{{ route('admin.orders.export', array_filter(['status' => $status, 'q' => $search, 'date_from' => $dateFrom, 'date_to' => $dateTo])) }}"
        class="btn btn-outline btn-sm" title="تصدير الطلبات الحالية إلى CSV">
-        <i class="fas fa-download"></i> تصدير CSV
+        <i class="fas fa-download"></i> CSV
     </a>
 </div>
 @endsection

@@ -173,6 +173,9 @@
         <a href="{{ route('admin.carts') }}" class="nav-link @if(request()->routeIs('admin.carts*')) active @endif">
             <i class="fas fa-shopping-cart"></i> السلة المتروكة
         </a>
+        <a href="{{ route('admin.customers') }}" class="nav-link @if(request()->routeIs('admin.customers*')) active @endif">
+            <i class="fas fa-users"></i> العملاء
+        </a>
         <a href="{{ route('admin.products.index') }}" class="nav-link @if(request()->routeIs('admin.products*')) active @endif">
             <i class="fas fa-box-open"></i> المنتجات
         </a>

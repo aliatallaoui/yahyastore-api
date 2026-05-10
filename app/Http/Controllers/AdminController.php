@@ -143,8 +143,10 @@ class AdminController extends Controller
 
     public function orders(Request $request)
     {
-        $status = $request->query('status');
-        $search = $request->query('q');
+        $status    = $request->query('status');
+        $search    = $request->query('q');
+        $dateFrom  = $request->query('date_from');
+        $dateTo    = $request->query('date_to');
 
         $query = Order::with('items')->latest();
 
@@ -160,6 +162,13 @@ class AdminController extends Controller
             });
         }
 
+        if ($dateFrom) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('created_at', '<=', $dateTo);
+        }
+
         $orders = $query->paginate(20)->withQueryString();
 
         $counts = [
@@ -171,7 +180,7 @@ class AdminController extends Controller
             'cancelled' => Order::where('status', 'cancelled')->count(),
         ];
 
-        return view('admin.orders', compact('orders', 'counts', 'status', 'search'));
+        return view('admin.orders', compact('orders', 'counts', 'status', 'search', 'dateFrom', 'dateTo'));
     }
 
     public function orderShow(Order $order)
@@ -209,8 +218,10 @@ class AdminController extends Controller
 
     public function exportOrders(Request $request)
     {
-        $status = $request->query('status');
-        $search = $request->query('q');
+        $status   = $request->query('status');
+        $search   = $request->query('q');
+        $dateFrom = $request->query('date_from');
+        $dateTo   = $request->query('date_to');
 
         $query = Order::with('items')->latest();
 
@@ -223,6 +234,12 @@ class AdminController extends Controller
                   ->orWhere('name', 'like', "%{$search}%")
                   ->orWhere('phone', 'like', "%{$search}%");
             });
+        }
+        if ($dateFrom) {
+            $query->whereDate('created_at', '>=', $dateFrom);
+        }
+        if ($dateTo) {
+            $query->whereDate('created_at', '<=', $dateTo);
         }
 
         $orders = $query->get();
@@ -516,5 +533,34 @@ class AdminController extends Controller
     {
         $cart->delete();
         return back()->with('success', 'تم حذف السجل.');
+    }
+
+    // ── Customers ─────────────────────────────────────────────────────────────
+
+    public function customers(Request $request)
+    {
+        $search = $request->query('q');
+
+        $query = \Illuminate\Support\Facades\DB::table('orders')
+            ->selectRaw('
+                phone,
+                MAX(name)           as name,
+                COUNT(*)            as orders_count,
+                SUM(total)          as total_spent,
+                MAX(created_at)     as last_order_at,
+                MAX(wilaya_name)    as wilaya
+            ')
+            ->groupBy('phone');
+
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('phone', 'like', "%{$search}%")
+                  ->orWhere('name', 'like', "%{$search}%");
+            });
+        }
+
+        $customers = $query->orderByDesc('last_order_at')->paginate(30)->withQueryString();
+
+        return view('admin.customers', compact('customers', 'search'));
     }
 }

@@ -11,6 +11,37 @@
 
 @section('content')
 
+{{-- Filters --}}
+<div class="card" style="margin-bottom:16px;">
+    <div class="card-body" style="padding:14px 20px;">
+        <form method="GET" action="{{ route('admin.products.index') }}"
+              style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <input type="text" name="q" value="{{ $search ?? '' }}"
+                   placeholder="بحث باسم المنتج..." style="min-width:200px;">
+            <select name="category" style="min-width:140px;">
+                <option value="">كل الفئات</option>
+                @foreach($categories as $val => $label)
+                <option value="{{ $val }}" @selected(($categoryFilter ?? '') === $val)>{{ $label }}</option>
+                @endforeach
+            </select>
+            <select name="active" style="min-width:120px;">
+                <option value="">كل الحالات</option>
+                <option value="1" @selected(($activeFilter ?? '') === '1')>نشط</option>
+                <option value="0" @selected(($activeFilter ?? '') === '0')>مخفي</option>
+            </select>
+            <select name="stock" style="min-width:140px;">
+                <option value="">كل المخزون</option>
+                <option value="low" @selected(($stockFilter ?? '') === 'low')>مخزون منخفض</option>
+                <option value="out" @selected(($stockFilter ?? '') === 'out')>نفد المخزون</option>
+            </select>
+            <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> فلتر</button>
+            @if($search || $categoryFilter || $activeFilter !== null || $stockFilter)
+            <a href="{{ route('admin.products.index') }}" class="btn btn-outline btn-sm">✕ إعادة</a>
+            @endif
+        </form>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-header">
         <h3>{{ $products->count() }} منتج</h3>

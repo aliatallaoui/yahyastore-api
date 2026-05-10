@@ -72,6 +72,9 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/carts',                         [AdminController::class, 'carts'])->name('carts');
         Route::delete('/carts/{cart}',               [AdminController::class, 'cartDelete'])->name('carts.delete');
 
+        // Customers
+        Route::get('/customers',                     [AdminController::class, 'customers'])->name('customers');
+
         // Support Tickets
         Route::get('/tickets',                       [AdminController::class, 'tickets'])->name('tickets');
         Route::get('/tickets/{ticket}',              [AdminController::class, 'ticketShow'])->name('tickets.show');
