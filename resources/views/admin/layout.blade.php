@@ -198,7 +198,18 @@
             <div class="topbar-title">@yield('page-title', 'لوحة التحكم')</div>
             <div class="topbar-sub">ورشة يحيى | {{ now()->format('Y/m/d') }}</div>
         </div>
-        @yield('topbar-actions')
+        <div style="display:flex;align-items:center;gap:10px;">
+            @yield('topbar-actions')
+            {{-- Sound toggle --}}
+            <button id="soundToggleBtn" title="تفعيل/إيقاف الصوت" onclick="window._notif && window._notif.toggleMute()" style="
+                background:rgba(212,175,55,.1);border:1px solid rgba(212,175,55,.25);
+                color:var(--gold);border-radius:8px;padding:7px 12px;cursor:pointer;
+                font-size:.82rem;font-weight:700;font-family:inherit;display:flex;align-items:center;gap:6px;
+                transition:background .15s;">
+                <i id="soundIcon" class="fas fa-bell"></i>
+                <span id="soundLabel">الصوت</span>
+            </button>
+        </div>
     </div>
 
     <div class="content">
@@ -214,107 +225,179 @@
 </div>
 
 
-{{-- ── Order notification sound ─────────────────────────────────────────── --}}
+{{-- ── Order notification system ────────────────────────────────────────── --}}
 <div id="orderToast" style="
     display:none;position:fixed;bottom:28px;right:28px;z-index:9999;
-    background:#1a1a10;border:1px solid var(--gold);border-radius:12px;
-    padding:16px 20px;min-width:260px;box-shadow:0 8px 32px rgba(0,0,0,.6);
-    animation:slideIn .35s ease;
-" role="alert">
+    background:#1a1a10;border:1px solid var(--gold);border-radius:14px;
+    padding:18px 20px;min-width:280px;max-width:320px;
+    box-shadow:0 12px 40px rgba(0,0,0,.7);
+" role="alert" aria-live="assertive">
     <div style="display:flex;align-items:center;gap:12px;">
-        <div style="font-size:1.6rem;">🎉</div>
-        <div>
+        <div style="font-size:2rem;flex-shrink:0;">🎉</div>
+        <div style="flex:1;min-width:0;">
             <div style="color:var(--gold);font-weight:800;font-size:.95rem;">طلب جديد!</div>
-            <div id="orderToastMsg" style="color:var(--text-muted);font-size:.78rem;margin-top:2px;"></div>
+            <div id="orderToastMsg" style="color:var(--text-muted);font-size:.8rem;margin-top:3px;"></div>
         </div>
-        <button onclick="document.getElementById('orderToast').style.display='none'"
-                style="margin-right:auto;background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:1.1rem;padding:0 0 0 4px;">✕</button>
+        <button onclick="window._notif.closeToast()"
+                style="flex-shrink:0;background:none;border:none;color:var(--text-muted);
+                       cursor:pointer;font-size:1.1rem;padding:4px;line-height:1;
+                       transition:color .15s;" onmouseover="this.style.color='#fff'" onmouseout="this.style.color=''">✕</button>
     </div>
     <a id="orderToastLink" href="{{ route('admin.orders') }}"
-       style="display:block;margin-top:10px;text-align:center;background:var(--gold);color:#111;border-radius:7px;padding:6px;font-size:.82rem;font-weight:800;text-decoration:none;">
-        عرض الطلب
+       style="display:block;margin-top:12px;text-align:center;background:var(--gold);
+              color:#111;border-radius:8px;padding:8px;font-size:.85rem;
+              font-weight:800;text-decoration:none;transition:opacity .15s;"
+       onmouseover="this.style.opacity='.85'" onmouseout="this.style.opacity='1'">
+        عرض الطلبات &larr;
     </a>
 </div>
 
 <style>
-@keyframes slideIn { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+@keyframes _toastIn  { from { opacity:0; transform:translateY(16px) scale(.97); } to { opacity:1; transform:none; } }
+@keyframes _toastOut { from { opacity:1; transform:none; } to { opacity:0; transform:translateY(8px); } }
+#soundToggleBtn:hover { background:rgba(212,175,55,.2) !important; }
+#soundToggleBtn.muted { opacity:.5; }
 </style>
 
 <script>
-(function() {
-    const STORE_KEY = 'yhy_last_order_id';
-    const POLL_MS   = 30000;
+window._notif = (function() {
+    'use strict';
 
-    // ── Web Audio chime ──────────────────────────────────────────────────────
+    const STORE_KEY  = 'yhy_last_order_id';
+    const MUTE_KEY   = 'yhy_sound_muted';
+    const POLL_MS    = 28000;
+
+    // ── Single shared AudioContext — unlocked by first user gesture ──────────
+    let _ctx  = null;
+    let _muted = localStorage.getItem(MUTE_KEY) === '1';
+
+    function getCtx() {
+        if (!_ctx) {
+            _ctx = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        // Resume if suspended (browser autoplay policy)
+        if (_ctx.state === 'suspended') _ctx.resume();
+        return _ctx;
+    }
+
+    // Unlock on first real user interaction
+    function unlockAudio() {
+        if (_ctx && _ctx.state === 'running') return;
+        getCtx();
+        document.removeEventListener('click', unlockAudio);
+        document.removeEventListener('keydown', unlockAudio);
+    }
+    document.addEventListener('click',   unlockAudio, { once: false });
+    document.addEventListener('keydown', unlockAudio, { once: false });
+
+    // ── Chime: C5 → E5 → G5 → C6 (pleasant rising arpeggio) ────────────────
     function playChime() {
+        if (_muted) return;
         try {
-            const ctx  = new (window.AudioContext || window.webkitAudioContext)();
-            const notes = [523.25, 659.25, 783.99, 1046.5]; // C5 E5 G5 C6
+            const ctx   = getCtx();
+            const notes = [523.25, 659.25, 783.99, 1046.5];
+            const vol   = 0.38;
             notes.forEach((freq, i) => {
+                const t    = ctx.currentTime + i * 0.19;
                 const osc  = ctx.createOscillator();
                 const gain = ctx.createGain();
                 osc.connect(gain);
                 gain.connect(ctx.destination);
-                osc.type      = 'sine';
-                osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.18);
-                gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.18);
-                gain.gain.linearRampToValueAtTime(0.35, ctx.currentTime + i * 0.18 + 0.05);
-                gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.18 + 0.5);
-                osc.start(ctx.currentTime + i * 0.18);
-                osc.stop(ctx.currentTime + i * 0.18 + 0.55);
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, t);
+                gain.gain.setValueAtTime(0, t);
+                gain.gain.linearRampToValueAtTime(vol, t + 0.04);
+                gain.gain.exponentialRampToValueAtTime(0.001, t + 0.55);
+                osc.start(t);
+                osc.stop(t + 0.58);
             });
         } catch (e) {}
     }
 
-    // ── Toast ────────────────────────────────────────────────────────────────
+    // ── Toast show / hide ────────────────────────────────────────────────────
+    let _toastTimer = null;
+
     function showToast(msg) {
         const toast = document.getElementById('orderToast');
         const msgEl = document.getElementById('orderToastMsg');
         if (!toast) return;
         if (msgEl) msgEl.textContent = msg;
-        toast.style.display = 'block';
+        clearTimeout(_toastTimer);
         toast.style.animation = 'none';
-        toast.offsetHeight; // reflow
-        toast.style.animation = 'slideIn .35s ease';
-        clearTimeout(toast._timer);
-        toast._timer = setTimeout(() => { toast.style.display = 'none'; }, 8000);
+        toast.offsetHeight;            // force reflow
+        toast.style.display   = 'block';
+        toast.style.animation = '_toastIn .35s cubic-bezier(.22,.68,0,1.2) forwards';
+        _toastTimer = setTimeout(closeToast, 9000);
     }
 
-    // ── Poll ─────────────────────────────────────────────────────────────────
+    function closeToast() {
+        const toast = document.getElementById('orderToast');
+        if (!toast || toast.style.display === 'none') return;
+        toast.style.animation = '_toastOut .25s ease forwards';
+        setTimeout(() => { toast.style.display = 'none'; }, 260);
+    }
+
+    // ── Mute toggle ──────────────────────────────────────────────────────────
+    function updateMuteUI() {
+        const btn   = document.getElementById('soundToggleBtn');
+        const icon  = document.getElementById('soundIcon');
+        const label = document.getElementById('soundLabel');
+        if (!btn) return;
+        if (_muted) {
+            btn.classList.add('muted');
+            if (icon)  icon.className  = 'fas fa-bell-slash';
+            if (label) label.textContent = 'مكتوم';
+        } else {
+            btn.classList.remove('muted');
+            if (icon)  icon.className  = 'fas fa-bell';
+            if (label) label.textContent = 'الصوت';
+        }
+    }
+
+    function toggleMute() {
+        _muted = !_muted;
+        localStorage.setItem(MUTE_KEY, _muted ? '1' : '0');
+        updateMuteUI();
+        if (!_muted) {
+            // Play a test note so admin hears it's working
+            playChime();
+        }
+    }
+
+    updateMuteUI();
+
+    // ── Poll for new orders ──────────────────────────────────────────────────
     function poll() {
         fetch('{{ route("admin.orders.latest-id") }}', { credentials: 'same-origin' })
-            .then(r => r.json())
+            .then(r => r.ok ? r.json() : null)
             .then(data => {
-                const newId  = data.id || 0;
+                if (!data) return;
+                const newId  = data.id  || 0;
                 const lastId = parseInt(localStorage.getItem(STORE_KEY) || '0');
 
-                if (lastId === 0) {
-                    // First run — just store current, don't alert
+                if (!lastId) {
                     localStorage.setItem(STORE_KEY, newId);
                     return;
                 }
 
                 if (newId > lastId) {
                     localStorage.setItem(STORE_KEY, newId);
-                    playChime();
                     const diff = newId - lastId;
-                    showToast(diff > 1 ? `${diff} طلبات جديدة وصلت!` : 'طلب جديد وصل للتو!');
+                    playChime();
+                    showToast(diff > 1 ? `وصل ${diff} طلبات جديدة!` : 'وصل طلب جديد للتو!');
 
-                    // Update order link to show latest order
-                    const link = document.getElementById('orderToastLink');
-                    if (link) link.href = '{{ route("admin.orders") }}';
-
-                    // Update pending badge in sidebar without reload
-                    const badge = document.querySelector('.sidebar-nav .nav-link[href*="orders"] span');
-                    if (badge) badge.textContent = parseInt(badge.textContent || 0) + diff;
+                    // Bump pending badge count in sidebar
+                    const badge = document.querySelector('.sidebar-nav a[href*="/orders"] span');
+                    if (badge) badge.textContent = Math.max(0, parseInt(badge.textContent || 0) + diff);
                 }
             })
             .catch(() => {});
     }
 
-    // Start polling after a short delay (let page settle)
-    setTimeout(poll, 3000);
+    setTimeout(poll, 4000);
     setInterval(poll, POLL_MS);
+
+    return { toggleMute, closeToast, playChime };
 })();
 </script>
 
