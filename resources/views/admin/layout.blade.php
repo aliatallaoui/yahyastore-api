@@ -148,7 +148,10 @@
         <p>ورشة يحيى للموس البوسعادي</p>
     </div>
     <nav class="sidebar-nav">
-        @php $pendingCount = \App\Models\Order::where('status','pending')->count(); @endphp
+        @php
+            $pendingCount = \App\Models\Order::where('status','pending')->count();
+            $newTickets   = \App\Models\SupportTicket::where('status','new')->count();
+        @endphp
         <a href="{{ route('admin.dashboard') }}" class="nav-link @if(request()->routeIs('admin.dashboard')) active @endif">
             <i class="fas fa-chart-bar"></i> لوحة التحكم
         </a>
@@ -156,6 +159,12 @@
             <i class="fas fa-shopping-bag"></i> الطلبات
             @if($pendingCount > 0)
             <span style="margin-right:auto; background:var(--gold); color:#111; font-size:.65rem; font-weight:800; padding:2px 7px; border-radius:20px;">{{ $pendingCount }}</span>
+            @endif
+        </a>
+        <a href="{{ route('admin.tickets') }}" class="nav-link @if(request()->routeIs('admin.tickets*')) active @endif">
+            <i class="fas fa-headset"></i> رسائل الدعم
+            @if($newTickets > 0)
+            <span style="margin-right:auto; background:#e74c3c; color:#fff; font-size:.65rem; font-weight:800; padding:2px 7px; border-radius:20px;">{{ $newTickets }}</span>
             @endif
         </a>
         <a href="{{ route('admin.products.index') }}" class="nav-link @if(request()->routeIs('admin.products*')) active @endif">

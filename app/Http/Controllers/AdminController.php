@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Order;
+use App\Models\SupportTicket;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -65,10 +66,11 @@ class AdminController extends Controller
     public function dashboard()
     {
         $stats = [
-            'orders_total'   => Order::count(),
-            'orders_today'   => Order::whereDate('created_at', today())->count(),
-            'orders_pending' => Order::where('status', 'pending')->count(),
-            'revenue_total'  => Order::whereIn('status', ['confirmed','shipped','delivered'])->sum('total'),
+            'orders_total'    => Order::count(),
+            'orders_today'    => Order::whereDate('created_at', today())->count(),
+            'orders_pending'  => Order::where('status', 'pending')->count(),
+            'revenue_total'   => Order::whereIn('status', ['confirmed','shipped','delivered'])->sum('total'),
+            'tickets_new'     => SupportTicket::where('status', 'new')->count(),
         ];
 
         $recent = Order::with('items')->latest()->limit(8)->get();
@@ -164,5 +166,49 @@ class AdminController extends Controller
         $order->delete();
 
         return redirect()->route('admin.orders')->with('success', 'تم حذف الطلب.');
+    }
+
+    // ── Support Tickets ───────────────────────────────────────────────────────
+
+    public function tickets(Request $request)
+    {
+        $status = $request->query('status');
+
+        $query = SupportTicket::latest();
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
+
+        $tickets = $query->paginate(20)->withQueryString();
+
+        $counts = [
+            'all'     => SupportTicket::count(),
+            'new'     => SupportTicket::where('status', 'new')->count(),
+            'read'    => SupportTicket::where('status', 'read')->count(),
+            'replied' => SupportTicket::where('status', 'replied')->count(),
+        ];
+
+        return view('admin.tickets', compact('tickets', 'counts', 'status'));
+    }
+
+    public function ticketShow(SupportTicket $ticket)
+    {
+        if ($ticket->status === 'new') {
+            $ticket->update(['status' => 'read']);
+        }
+        return view('admin.ticket-show', compact('ticket'));
+    }
+
+    public function ticketUpdateStatus(Request $request, SupportTicket $ticket)
+    {
+        $request->validate(['status' => 'required|in:new,read,replied']);
+        $ticket->update(['status' => $request->status]);
+        return back()->with('success', 'تم تحديث الحالة.');
+    }
+
+    public function ticketDelete(SupportTicket $ticket)
+    {
+        $ticket->delete();
+        return redirect()->route('admin.tickets')->with('success', 'تم حذف التذكرة.');
     }
 }

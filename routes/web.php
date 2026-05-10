@@ -37,6 +37,7 @@ Route::prefix('api')->name('api.')->group(function () {
     Route::options('/{any}',  [ApiController::class, 'handleOptions'])->where('any', '.*');
     Route::get('/products',   [ApiController::class, 'products'])->name('products');
     Route::post('/orders',    [ApiController::class, 'storeOrder'])->name('orders');
+    Route::post('/contact',   [ApiController::class, 'storeTicket'])->name('contact');
 });
 
 // Admin
@@ -56,6 +57,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
         Route::get('/profile',                       [AdminController::class, 'profileForm'])->name('profile');
         Route::post('/profile/password',             [AdminController::class, 'changePassword'])->name('profile.password');
         Route::post('/profile/name',                 [AdminController::class, 'changeName'])->name('profile.name');
+
+        // Support Tickets
+        Route::get('/tickets',                       [AdminController::class, 'tickets'])->name('tickets');
+        Route::get('/tickets/{ticket}',              [AdminController::class, 'ticketShow'])->name('tickets.show');
+        Route::post('/tickets/{ticket}/status',      [AdminController::class, 'ticketUpdateStatus'])->name('tickets.status');
+        Route::delete('/tickets/{ticket}',           [AdminController::class, 'ticketDelete'])->name('tickets.delete');
 
         // Products
         Route::get('/products',                      [AdminProductController::class, 'index'])->name('products.index');

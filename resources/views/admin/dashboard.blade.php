@@ -11,7 +11,7 @@ $badgeClass  = ['pending'=>'badge-pending','confirmed'=>'badge-confirmed','shipp
 @endphp
 
 {{-- Stats --}}
-<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px;">
+<div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;margin-bottom:28px;">
 
     <div class="stat-card">
         <div style="font-size:1.6rem;margin-bottom:6px;opacity:.6;">📦</div>
@@ -38,6 +38,16 @@ $badgeClass  = ['pending'=>'badge-pending','confirmed'=>'badge-confirmed','shipp
         <div class="val" style="font-size:1.2rem;">{{ number_format($stats['revenue_total'], 0, '.', ',') }}</div>
         <div class="lbl">إجمالي المبيعات (DZD)</div>
     </div>
+
+    <a href="{{ route('admin.tickets', ['status'=>'new']) }}" style="text-decoration:none;">
+    <div class="stat-card {{ $stats['tickets_new'] > 0 ? 'active' : '' }}" style="{{ $stats['tickets_new'] > 0 ? 'border-color:var(--danger);background:rgba(231,76,60,.07);' : '' }}">
+        <div style="font-size:1.6rem;margin-bottom:6px;opacity:.6;">💬</div>
+        <div class="val" style="{{ $stats['tickets_new'] > 0 ? 'color:var(--danger)' : '' }}">
+            {{ $stats['tickets_new'] }}
+        </div>
+        <div class="lbl">رسائل جديدة</div>
+    </div>
+    </a>
 
 </div>
 

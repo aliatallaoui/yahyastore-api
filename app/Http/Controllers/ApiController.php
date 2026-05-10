@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\SupportTicket;
+use App\Services\MetaPixelService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -48,7 +50,7 @@ class ApiController extends Controller
             'wilaya'        => 'required|string|max:100',
             'wilaya_code'   => 'required|string',
             'commune'       => 'nullable|string|max:100',
-            'address'       => 'required|string|min:5|max:500',
+            'address'       => 'nullable|string|max:500',
             'delivery_type' => 'nullable|in:home,desk',
             'notes'         => 'nullable|string|max:300',
             'shipping_price'=> 'required|integer|min:0',
@@ -105,6 +107,17 @@ class ApiController extends Controller
             return $order;
         });
 
+        // Fire server-side Purchase event to Meta Conversions API
+        (new MetaPixelService)->purchase(
+            orderNumber: $order->order_number,
+            total:       $total,
+            currency:    'USD',
+            items:       $data['items'],
+            phone:       $data['phone'],
+            clientIp:    $request->ip(),
+            userAgent:   $request->userAgent() ?? '',
+        );
+
         return response()->json([
             'success' => true,
             'data'    => [
@@ -150,6 +163,21 @@ class ApiController extends Controller
         $msg .= "━━━━━━━━━━━━━━━";
 
         return 'https://wa.me/' . $waNumber . '?text=' . rawurlencode($msg);
+    }
+
+    public function storeTicket(Request $request)
+    {
+        $data = $request->validate([
+            'name'    => 'nullable|string|max:100',
+            'phone'   => 'nullable|string|max:20',
+            'subject' => 'nullable|string|max:200',
+            'message' => 'nullable|string|max:2000',
+        ]);
+
+        $ticket = SupportTicket::create($data);
+
+        return response()->json(['success' => true, 'id' => $ticket->id])
+            ->header('Access-Control-Allow-Origin', '*');
     }
 
     public function handleOptions()
