@@ -7,6 +7,7 @@ use App\Models\AnalyticsEvent;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
+use App\Models\PromoCode;
 use App\Models\SupportTicket;
 use App\Services\MetaPixelService;
 use Illuminate\Http\Request;
@@ -58,6 +59,7 @@ class ApiController extends Controller
             'delivery_type' => 'nullable|in:home,desk',
             'notes'         => 'nullable|string|max:300',
             'shipping_price'=> 'required|integer|min:0',
+            'promo_code'    => 'nullable|string|max:30',
             'items'         => 'required|array|min:1',
             'items.*.product_id'   => 'nullable|integer',
             'items.*.product_name' => 'required|string',
@@ -67,14 +69,27 @@ class ApiController extends Controller
 
         $subtotal    = array_sum(array_map(fn($i) => $i['unit_price'] * $i['quantity'], $data['items']));
         $shipping    = (int) $data['shipping_price'];
-        $total       = $subtotal + $shipping;
+
+        // Promo code
+        $promo    = null;
+        $discount = 0;
+        if (!empty($data['promo_code'])) {
+            $promo = PromoCode::where('code', strtoupper($data['promo_code']))->first();
+            if ($promo && $promo->isValid($subtotal)) {
+                $discount = $promo->discountAmount($subtotal);
+            }
+        }
+
+        $total       = max(0, $subtotal - $discount) + $shipping;
         $orderNumber = 'YHY-' . strtoupper(substr(uniqid(), -6));
 
-        $order = DB::transaction(function () use ($data, $orderNumber, $subtotal, $shipping, $total) {
+        $order = DB::transaction(function () use ($data, $orderNumber, $subtotal, $shipping, $total, $discount, $promo) {
+            $promoNote = $promo ? ' | كود خصم: ' . $promo->code . ' (-' . number_format($discount, 0, '.', ',') . ' DZD)' : '';
             $notes = trim(
                 (($data['delivery_type'] ?? '') === 'desk' ? 'التسليم: مكتب البريد. ' : '')
                 . ($data['second_phone'] ?? null ? 'هاتف 2: ' . $data['second_phone'] . '. ' : '')
                 . ($data['notes'] ?? '')
+                . $promoNote
             );
 
             $order = Order::create([
@@ -83,7 +98,7 @@ class ApiController extends Controller
                 'phone'          => $data['phone'],
                 'wilaya_code'    => (int) $data['wilaya_code'],
                 'wilaya_name'    => $data['wilaya'],
-                'address'        => $data['address'] . (($data['commune'] ?? null) ? ' — ' . $data['commune'] : ''),
+                'address'        => ($data['address'] ?? '') . (($data['commune'] ?? null) ? ' — ' . $data['commune'] : ''),
                 'notes'          => $notes,
                 'subtotal'       => $subtotal,
                 'shipping'       => $shipping,
@@ -104,8 +119,10 @@ class ApiController extends Controller
                 ]);
             }
 
+            if ($promo) $promo->incrementUsed();
+
             // Build WhatsApp URL so admin can contact the customer directly
-            $waUrl = $this->buildWhatsAppUrl($order, $data['items'], $subtotal, $shipping, $total);
+            $waUrl = $this->buildWhatsAppUrl($order, $data['items'], $subtotal, $shipping, $total, $discount, $promo?->code);
             $order->update(['whatsapp_url' => $waUrl]);
 
             return $order;
@@ -133,7 +150,7 @@ class ApiController extends Controller
         ])->header('Access-Control-Allow-Origin', '*');
     }
 
-    private function buildWhatsAppUrl(Order $order, array $items, int $subtotal, int $shipping, int $total): string
+    private function buildWhatsAppUrl(Order $order, array $items, int $subtotal, int $shipping, int $total, int $discount = 0, ?string $promoCode = null): string
     {
         $storeName = config('app.name', 'ورشة يحيى');
         $waNumber  = config('app.store_whatsapp', '213775108618');
@@ -161,6 +178,9 @@ class ApiController extends Controller
         $msg .= "━━━━━━━━━━━━━━━\n";
         $msg .= "*ملخص الطلب:*\n";
         $msg .= "المجموع: " . number_format($subtotal, 0, '.', ',') . " دج\n";
+        if ($discount > 0 && $promoCode) {
+            $msg .= "خصم ({$promoCode}): -" . number_format($discount, 0, '.', ',') . " دج\n";
+        }
         $msg .= "الشحن: " . number_format($shipping, 0, '.', ',') . " دج\n";
         $msg .= "*الإجمالي: " . number_format($total, 0, '.', ',') . " دج*\n";
         $msg .= "\n*طريقة الدفع:* الدفع عند الاستلام (COD)\n";
@@ -228,6 +248,38 @@ class ApiController extends Controller
 
         return response()->json(['success' => true, 'id' => $ticket->id])
             ->header('Access-Control-Allow-Origin', '*');
+    }
+
+    public function checkPromo(Request $request)
+    {
+        $request->validate([
+            'code'        => 'required|string|max:30',
+            'order_total' => 'required|integer|min:0',
+        ]);
+
+        $promo = PromoCode::where('code', strtoupper($request->input('code')))->first();
+
+        if (!$promo || !$promo->isValid((int) $request->input('order_total'))) {
+            $reason = 'كود الخصم غير صالح أو منتهي الصلاحية';
+            if ($promo && $promo->min_order && (int) $request->input('order_total') < $promo->min_order) {
+                $reason = 'الحد الأدنى للطلب هو ' . number_format($promo->min_order, 0, '.', ',') . ' DZD';
+            }
+            return response()->json(['valid' => false, 'message' => $reason])
+                ->header('Access-Control-Allow-Origin', '*');
+        }
+
+        $subtotal = (int) $request->input('order_total');
+        $discount = $promo->discountAmount($subtotal);
+
+        return response()->json([
+            'valid'    => true,
+            'type'     => $promo->type,
+            'value'    => $promo->value,
+            'discount' => $discount,
+            'label'    => $promo->type === 'percent'
+                ? 'خصم ' . $promo->value . '%'
+                : 'خصم ' . number_format($promo->value, 0, '.', ',') . ' DZD',
+        ])->header('Access-Control-Allow-Origin', '*');
     }
 
     public function trackOrder(Request $request)

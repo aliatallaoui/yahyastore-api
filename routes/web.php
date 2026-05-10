@@ -6,6 +6,7 @@ use App\Http\Controllers\CartController;
 use App\Http\Controllers\CheckoutController;
 use App\Http\Controllers\AdminController;
 use App\Http\Controllers\AdminProductController;
+use App\Http\Controllers\AdminPromoController;
 use App\Http\Controllers\ApiController;
 use Illuminate\Support\Facades\Route;
 
@@ -39,8 +40,9 @@ Route::prefix('api')->name('api.')->group(function () {
     Route::post('/orders',    [ApiController::class, 'storeOrder'])->name('orders');
     Route::post('/contact',    [ApiController::class, 'storeTicket'])->name('contact');
     Route::post('/analytics',  [ApiController::class, 'storeAnalytics'])->name('analytics');
-    Route::post('/carts/save', [ApiController::class, 'saveCart'])->name('carts.save');
+    Route::post('/carts/save',   [ApiController::class, 'saveCart'])->name('carts.save');
     Route::get('/orders/track',  [ApiController::class, 'trackOrder'])->name('orders.track');
+    Route::post('/promo/check',  [ApiController::class, 'checkPromo'])->name('promo.check');
 });
 
 // Admin
@@ -75,6 +77,12 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
         // Customers
         Route::get('/customers',                     [AdminController::class, 'customers'])->name('customers');
+
+        // Promo Codes
+        Route::get('/promos',                        [AdminPromoController::class, 'index'])->name('promos');
+        Route::post('/promos',                       [AdminPromoController::class, 'store'])->name('promos.store');
+        Route::post('/promos/{promo}/toggle',        [AdminPromoController::class, 'toggle'])->name('promos.toggle');
+        Route::delete('/promos/{promo}',             [AdminPromoController::class, 'destroy'])->name('promos.destroy');
 
         // Support Tickets
         Route::get('/tickets',                       [AdminController::class, 'tickets'])->name('tickets');

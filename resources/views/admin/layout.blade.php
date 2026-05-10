@@ -179,6 +179,9 @@
         <a href="{{ route('admin.products.index') }}" class="nav-link @if(request()->routeIs('admin.products*')) active @endif">
             <i class="fas fa-box-open"></i> المنتجات
         </a>
+        <a href="{{ route('admin.promos') }}" class="nav-link @if(request()->routeIs('admin.promos*')) active @endif">
+            <i class="fas fa-tag"></i> أكواد الخصم
+        </a>
         <a href="{{ route('admin.profile') }}" class="nav-link @if(request()->routeIs('admin.profile')) active @endif">
             <i class="fas fa-user-shield"></i> الملف الشخصي
         </a>
