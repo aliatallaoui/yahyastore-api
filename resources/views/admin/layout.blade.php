@@ -149,6 +149,9 @@
     </div>
     <nav class="sidebar-nav">
         @php $pendingCount = \App\Models\Order::where('status','pending')->count(); @endphp
+        <a href="{{ route('admin.dashboard') }}" class="nav-link @if(request()->routeIs('admin.dashboard')) active @endif">
+            <i class="fas fa-chart-bar"></i> لوحة التحكم
+        </a>
         <a href="{{ route('admin.orders') }}" class="nav-link @if(request()->routeIs('admin.orders*')) active @endif">
             <i class="fas fa-shopping-bag"></i> الطلبات
             @if($pendingCount > 0)

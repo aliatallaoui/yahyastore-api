@@ -16,7 +16,7 @@ class AdminController extends Controller
     public function loginForm()
     {
         if (Auth::check() && Auth::user()->is_admin) {
-            return redirect()->route('admin.orders');
+            return redirect()->route('admin.dashboard');
         }
         return view('admin.login');
     }
@@ -42,7 +42,7 @@ class AdminController extends Controller
         if (Auth::attempt($credentials, $request->boolean('remember'))) {
             RateLimiter::clear($key);
             $request->session()->regenerate();
-            return redirect()->intended(route('admin.orders'));
+            return redirect()->intended(route('admin.dashboard'));
         }
 
         RateLimiter::hit($key, 300);
@@ -58,6 +58,22 @@ class AdminController extends Controller
         $request->session()->invalidate();
         $request->session()->regenerateToken();
         return redirect()->route('admin.login');
+    }
+
+    // ── Dashboard ─────────────────────────────────────────────────────────────
+
+    public function dashboard()
+    {
+        $stats = [
+            'orders_total'   => Order::count(),
+            'orders_today'   => Order::whereDate('created_at', today())->count(),
+            'orders_pending' => Order::where('status', 'pending')->count(),
+            'revenue_total'  => Order::whereIn('status', ['confirmed','shipped','delivered'])->sum('total'),
+        ];
+
+        $recent = Order::with('items')->latest()->limit(8)->get();
+
+        return view('admin.dashboard', compact('stats', 'recent'));
     }
 
     // ── Profile / Change password ─────────────────────────────────────────────

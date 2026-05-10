@@ -53,8 +53,9 @@ class AdminProductController extends Controller
 
     public function toggle(Product $product)
     {
-        $product->update(['active' => !$product->active]);
-        return back()->with('success', $product->active ? 'تم تفعيل المنتج.' : 'تم إيقاف المنتج.');
+        $newState = !$product->active;
+        $product->update(['active' => $newState]);
+        return back()->with('success', $newState ? 'تم تفعيل المنتج.' : 'تم إيقاف المنتج.');
     }
 
     private function validated(Request $request, ?Product $product = null): array

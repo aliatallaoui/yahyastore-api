@@ -46,6 +46,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::post('/logout', [AdminController::class, 'logout'])->name('logout');
 
     Route::middleware('admin')->group(function () {
+        Route::get('/',                              [AdminController::class, 'dashboard'])->name('dashboard');
         Route::get('/orders',                        [AdminController::class, 'orders'])->name('orders');
         Route::get('/orders/{order}',                [AdminController::class, 'orderShow'])->name('orders.show');
         Route::post('/orders/{order}/status',        [AdminController::class, 'orderUpdateStatus'])->name('orders.status');
