@@ -50,6 +50,8 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::middleware('admin')->group(function () {
         Route::get('/',                              [AdminController::class, 'dashboard'])->name('dashboard');
         Route::get('/orders',                        [AdminController::class, 'orders'])->name('orders');
+        Route::get('/orders/export',                 [AdminController::class, 'exportOrders'])->name('orders.export');
+        Route::post('/orders/bulk-status',           [AdminController::class, 'bulkUpdateOrders'])->name('orders.bulk-status');
         Route::get('/orders/{order}',                [AdminController::class, 'orderShow'])->name('orders.show');
         Route::post('/orders/{order}/status',        [AdminController::class, 'orderUpdateStatus'])->name('orders.status');
         Route::delete('/orders/{order}',             [AdminController::class, 'orderDelete'])->name('orders.delete');

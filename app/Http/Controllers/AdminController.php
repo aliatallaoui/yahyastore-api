@@ -169,6 +169,95 @@ class AdminController extends Controller
         return redirect()->route('admin.orders')->with('success', 'تم حذف الطلب.');
     }
 
+    // ── Orders export (CSV) ───────────────────────────────────────────────────
+
+    public function exportOrders(Request $request)
+    {
+        $status = $request->query('status');
+        $search = $request->query('q');
+
+        $query = Order::with('items')->latest();
+
+        if ($status && $status !== 'all') {
+            $query->where('status', $status);
+        }
+        if ($search) {
+            $query->where(function ($q) use ($search) {
+                $q->where('order_number', 'like', "%{$search}%")
+                  ->orWhere('name', 'like', "%{$search}%")
+                  ->orWhere('phone', 'like', "%{$search}%");
+            });
+        }
+
+        $orders = $query->get();
+
+        $statusLabels = [
+            'pending'   => 'قيد الانتظار',
+            'confirmed' => 'مؤكد',
+            'shipped'   => 'تم الشحن',
+            'delivered' => 'تم التسليم',
+            'cancelled' => 'ملغي',
+        ];
+
+        $rows   = [];
+        $rows[] = ['رقم الطلب','التاريخ','الاسم','الهاتف','كود الولاية','الولاية','العنوان','المنتجات','مجموع المنتجات','الشحن','الإجمالي','الحالة','ملاحظات'];
+
+        foreach ($orders as $order) {
+            $itemsSummary = $order->items->map(fn($i) => "{$i->product_name} x{$i->qty}")->implode(' | ');
+            $rows[] = [
+                $order->order_number,
+                $order->created_at->format('Y-m-d H:i'),
+                $order->name,
+                $order->phone,
+                $order->wilaya_code,
+                $order->wilaya_name,
+                $order->address,
+                $itemsSummary,
+                $order->subtotal,
+                $order->shipping,
+                $order->total,
+                $statusLabels[$order->status] ?? $order->status,
+                $order->notes,
+            ];
+        }
+
+        $filename = 'orders-' . now()->format('Y-m-d') . '.csv';
+
+        $headers = [
+            'Content-Type'        => 'text/csv; charset=UTF-8',
+            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
+        ];
+
+        $callback = function () use ($rows) {
+            $handle = fopen('php://output', 'w');
+            // BOM for Excel Arabic support
+            fputs($handle, "\xEF\xBB\xBF");
+            foreach ($rows as $row) {
+                fputcsv($handle, $row);
+            }
+            fclose($handle);
+        };
+
+        return response()->stream($callback, 200, $headers);
+    }
+
+    // ── Bulk order status update ───────────────────────────────────────────────
+
+    public function bulkUpdateOrders(Request $request)
+    {
+        $request->validate([
+            'order_ids'   => 'required|array|min:1',
+            'order_ids.*' => 'integer|exists:orders,id',
+            'status'      => 'required|in:pending,confirmed,shipped,delivered,cancelled',
+        ]);
+
+        Order::whereIn('id', $request->order_ids)
+             ->update(['status' => $request->status]);
+
+        $count = count($request->order_ids);
+        return back()->with('success', "تم تحديث {$count} طلب بنجاح.");
+    }
+
     // ── Order notification polling ────────────────────────────────────────────
 
     public function latestOrderId()
